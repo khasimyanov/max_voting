@@ -407,15 +407,15 @@ function initApp() {
           username: u.username || '',
         };
       }
-      // Если открыто с ?poll=ID — сразу идём голосовать
       const sp = wa.initDataUnsafe?.start_param;
+      // ДОБАВЬ ЭТО:
+      alert('start_param: ' + sp);
       if (sp && sp.startsWith('poll_')) {
         loadPoll(sp.replace('poll_', ''));
         return;
       }
     }
-  } catch(e) {}
-  // Иначе — экран создания
+  } catch(e) { alert('error: ' + e); }
   showScreen('screen-create');
 }
 
