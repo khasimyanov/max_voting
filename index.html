@@ -411,9 +411,9 @@ function initApp() {
       // ДОБАВЬ ЭТО:
       alert('start_param: ' + sp);
       if (sp && sp.startsWith('poll_')) {
-        loadPoll(sp.replace('poll_', ''));
-        return;
-      }
+  loadPoll(sp);  // передаём poll_id целиком
+  return;
+}
     }
   } catch(e) { alert('error: ' + e); }
   showScreen('screen-create');
