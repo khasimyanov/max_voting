@@ -362,7 +362,7 @@
       <div class="header-title">Результаты</div>
       <div class="header-sub" id="results-meta"></div>
     </div>
-    <button class="btn-icon" onclick="shareResults()" title="Поделиться" style="width:40px;height:40px;font-size:16px">↗</button>
+    <div></div>
   </div>
 
   <div class="card">
@@ -411,13 +411,15 @@
 const API = 'https://script.google.com/macros/s/AKfycbxnvJA-VSuu5J9CeMTqYETT4ZVnN0iLO9ot5DM7W0c13db7wbmRdl3NkE9Em62XNShbeA/exec';
 
 async function api(action, body) {
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...body }),
+  const params = new URLSearchParams({
+    action,
+    data: JSON.stringify(body)
   });
+  const res = await fetch(`${API}?${params}`, { method: 'GET' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'server_error');
+  return data;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -427,7 +429,6 @@ let currentUser = { id: null, name: 'Пользователь', username: '' };
 let currentPoll = null;
 let selectedOptions = new Set();
 let prevScreen = 'screen-create';
-let prev
 // ══════════════════════════════════════════════════════════
 // Init — MAX Bridge
 // ══════════════════════════════════════════════════════════
@@ -447,7 +448,7 @@ function initApp() {
       // Если открыто с ?poll=ID — сразу идём голосовать
       const sp = wa.initDataUnsafe?.start_param;
       if (sp && sp.startsWith('poll_')) {
-        loadPoll(sp.replace('poll_', ''));
+        loadPoll(sp);
         return;
       }
     }
