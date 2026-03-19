@@ -374,10 +374,12 @@
 const API = 'https://script.google.com/macros/s/AKfycbzoZqmuXx_bVZDFivgVa9UP0i5u0-vtUDKo2Cou_Wggp4lDCjpZExwNvBdzKYvkDo589A/exec';
 
 async function api(action, body) {
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...body }),
+  const params = new URLSearchParams({
+    action,
+    data: JSON.stringify(body)
+  });
+  const res = await fetch(`${API}?${params}`, {
+    method: 'GET',
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
