@@ -521,19 +521,29 @@ async function publishPoll() {
   btn.textContent = 'Публикуем...';
 
   try {
-    const res = await api('create', {
-      question, options, anonymous, multiple,
-      creator_id:   currentUser.id,
-      creator_name: currentUser.name,
+    const params = new URLSearchParams({
+      action: 'create',
+      data: JSON.stringify({
+        question, options, anonymous, multiple,
+        creator_id:   currentUser.id,
+        creator_name: currentUser.name,
+      })
     });
-    toast('Опрос опубликован!', 'success');
-    // Переходим в режим просмотра результатов созданного опроса
-    currentPoll = res.poll;
-    renderResults(res.poll);
+    toast('Отправляем запрос...', '');
+    const res = await fetch(`${API}?${params}`, { method: 'GET' });
+    toast('Статус: ' + res.status, '');
+    const data = await res.json();
+    toast('Ответ: ' + JSON.stringify(data).slice(0, 50), '');
+    
+    if (!data.ok) throw new Error(data.error || 'server_error');
+    
+    currentPoll = data.poll;
+    renderResults(data.poll);
     prevScreen = 'screen-create';
     showScreen('screen-results');
+    toast('Опрос опубликован!', 'success');
   } catch(e) {
-    toast('Ошибка публикации', 'error');
+    toast('Ошибка: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Опубликовать опрос';
