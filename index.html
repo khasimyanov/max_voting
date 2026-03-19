@@ -238,6 +238,30 @@
   .gap-16 { height: 16px; }
 
   .total-votes { font-size: 13px; color: var(--text2); text-align: right; margin-bottom: 16px; }
+
+  /* ── Detail screen ── */
+  .detail-option-header {
+    font-size: 13px; font-weight: 600; color: var(--accent2);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 14px 0 8px; border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+  .detail-option-header:first-child { border-top: none; padding-top: 0; }
+  .detail-option-pct { color: var(--text2); font-weight: 400; margin-left: 6px; }
+  .voter-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .voter-row:last-child { border-bottom: none; }
+  .voter-avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent); display: flex; align-items: center;
+    justify-content: center; font-size: 14px; font-weight: 600; color: white;
+  }
+  .voter-info { flex: 1; }
+  .voter-name { font-size: 14px; }
+  .voter-time { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .no-voters { font-size: 14px; color: var(--text2); padding: 12px 0; }
 </style>
 </head>
 <body>
@@ -355,6 +379,19 @@
   <button class="btn-outline" onclick="goBack()">← Назад</button>
 </div>
 
+<!-- Detail screen: кто проголосовал -->
+<div class="screen" id="screen-detail">
+  <div class="header">
+    <div>
+      <div class="header-title">Кто голосовал</div>
+      <div class="header-sub" id="detail-meta"></div>
+    </div>
+  </div>
+  <div class="card" id="detail-list"></div>
+  <div class="spacer"></div>
+  <button class="btn-outline" onclick="showScreen('screen-results')">← К результатам</button>
+</div>
+
 <!-- Loading screen -->
 <div class="screen" id="screen-loading">
   <div class="loading-center">
@@ -371,15 +408,13 @@
 // CONFIG — замени на свои URL воркфлоу n8n
 // ══════════════════════════════════════════════════════════
 // Единый endpoint — action различает ветки
-const API = 'https://script.google.com/macros/s/AKfycbwfnwu2dqckyqg40ZhFB8kpfZlgwzXod38N8mAp9RFbD3huHT_KKerxx51SdL2i5wl8uw/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxnvJA-VSuu5J9CeMTqYETT4ZVnN0iLO9ot5DM7W0c13db7wbmRdl3NkE9Em62XNShbeA/exec';
 
 async function api(action, body) {
-  const params = new URLSearchParams({
-    action,
-    data: JSON.stringify(body)
-  });
-  const res = await fetch(`${API}?${params}`, {
-    method: 'GET',
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...body }),
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
@@ -409,15 +444,15 @@ function initApp() {
           username: u.username || '',
         };
       }
+      // Если открыто с ?poll=ID — сразу идём голосовать
       const sp = wa.initDataUnsafe?.start_param;
-      // ДОБАВЬ ЭТО:
-      alert('start_param: ' + sp);
       if (sp && sp.startsWith('poll_')) {
-  loadPoll(sp);  // передаём poll_id целиком
-  return;
-}
+        loadPoll(sp.replace('poll_', ''));
+        return;
+      }
     }
-  } catch(e) { alert('error: ' + e); }
+  } catch(e) {}
+  // Иначе — экран создания
   showScreen('screen-create');
 }
 
@@ -675,16 +710,78 @@ function renderResults(poll) {
     });
   });
 
-  // Voters section (если не анонимный)
+  // Кнопка "Подробнее" если не анонимный и есть голоса
   const vs = document.getElementById('voters-section');
-  if (!poll.anonymous && poll.voters && poll.voters.length > 0) {
-    vs.innerHTML = `<div class="voters-section">
-      <div class="voters-title">Проголосовали</div>
-      <div>${poll.voters.map(v => `<span class="voter-chip">${escHtml(v)}</span>`).join('')}</div>
-    </div>`;
+  if (!poll.anonymous && poll.total_votes > 0 && poll.voters_by_option) {
+    vs.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'btn-outline';
+    btn.style.marginTop = '4px';
+    btn.textContent = 'Подробнее — кто проголосовал';
+    btn.onclick = () => showDetail(poll);
+    vs.appendChild(btn);
   } else {
     vs.innerHTML = '';
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// DETAIL — кто проголосовал
+// ══════════════════════════════════════════════════════════
+function showDetail(poll) {
+  document.getElementById('detail-meta').textContent = poll.question;
+  const container = document.getElementById('detail-list');
+  container.innerHTML = '';
+
+  const byOption = poll.voters_by_option || [];
+
+  poll.options.forEach((opt, i) => {
+    const voters = byOption[i] || [];
+    const cnt = poll.votes[i] || 0;
+    const pct = poll.total_votes > 0 ? Math.round(cnt / poll.total_votes * 100) : 0;
+
+    const header = document.createElement('div');
+    header.className = 'detail-option-header';
+    header.innerHTML = `${escHtml(opt)} <span class="detail-option-pct">${pct}% · ${cnt} ${pluralVotes(cnt)}</span>`;
+    container.appendChild(header);
+
+    if (voters.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'no-voters';
+      empty.textContent = 'Никто не выбрал';
+      container.appendChild(empty);
+    } else {
+      voters.forEach(v => {
+        const initials = v.name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+        const colors = ['#7c6cfa','#34d399','#f87171','#fb923c','#60a5fa','#a78bfa','#4ade80'];
+        const color  = colors[v.name.charCodeAt(0) % colors.length];
+        const time   = v.voted_at ? formatVotedAt(v.voted_at) : '';
+
+        const row = document.createElement('div');
+        row.className = 'voter-row';
+        row.innerHTML = `
+          <div class="voter-avatar" style="background:${color}">${escHtml(initials)}</div>
+          <div class="voter-info">
+            <div class="voter-name">${escHtml(v.name)}</div>
+            ${time ? `<div class="voter-time">${time}</div>` : ''}
+          </div>`;
+        container.appendChild(row);
+      });
+    }
+  });
+
+  showScreen('screen-detail');
+}
+
+function formatVotedAt(iso) {
+  try {
+    const d = new Date(iso);
+    const day   = d.getDate();
+    const month = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'][d.getMonth()];
+    const hh    = String(d.getHours()).padStart(2,'0');
+    const mm    = String(d.getMinutes()).padStart(2,'0');
+    return `${day} ${month} ${hh}:${mm}`;
+  } catch(e) { return ''; }
 }
 
 // ══════════════════════════════════════════════════════════
